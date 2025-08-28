@@ -1,226 +1,285 @@
-﻿# 🐦 FlagCraft - Feature Flag Platform
+# FlagCraft
 
-A feature flag and canary release system built with Node.js, TypeScript, PostgreSQL, and Redis.
+A **feature flag** and **canary release** platform built with **Node.js**, **TypeScript**, **PostgreSQL**, and **Redis**.
 
-## 🎯 What is FlagCraft?
+Safely roll out features, run A/B tests, and flip kill switches instantly — without redeploying code.
 
-**FlagCraft** is a  feature flag platform that lets you safely release features to users without risky deployments. Instead of releasing features to everyone at once, you can:
+---
 
-- **Control who sees what**: Show features to specific users or groups
-- **Roll out gradually**: Start with 5% of users, then 25%, then 100%
-- **A/B test everything**: Compare different versions to see what works best
-- **Kill switch instantly**: Turn off problematic features in seconds, not hours
+## Table of Contents
 
-### 🚀 Simple Example
+* [What is FlagCraft?](#what-is-flagcraft)
+* [Why Use It](#why-use-it)
+* [Architecture](#architecture)
+* [How It Works (End‑to‑End Flow)](#how-it-works-endtoend-flow)
+* [Prerequisites](#prerequisites)
+* [Quick Start](#quick-start)
+* [Services & Ports](#services--ports)
+* [Environment Variables](#environment-variables)
+* [API Examples](#api-examples)
+* [SDK Usage](#sdk-usage)
+* [Monitoring & Metrics](#monitoring--metrics)
+* [Development Scripts](#development-scripts)
+* [Troubleshooting](#troubleshooting)
+* [Why This Project?](#why-this-project)
+* [License](#license)
 
-Imagine you built a new checkout flow but aren't sure if it's better than the old one:
+---
 
-```typescript
-// Instead of this risky deployment:
+## What is FlagCraft?
+
+FlagCraft is a feature management platform that lets you **control who sees what**, **roll out gradually**, **A/B test variants**, and **kill switch** problematic features instantly.
+
+**You can:**
+
+* **Control** exposure by user, segment, country, app version, etc.
+* **Roll out gradually** (e.g., 1% → 5% → 25% → 100%).
+* **A/B test** multiple variants with weights.
+* **Instantly disable** features with a kill switch.
+
+### Simple Example
+
+```ts
+// Risky (ships to everyone at once)
 if (true) {
-  showNewCheckout();  // 😱 All users get untested feature
+  showNewCheckout();
 }
 
-// Do this safe, gradual rollout:
+// Safer with FlagCraft
 const useNewCheckout = await flagcraft.evaluateFlag('new_checkout', {
   user_id: currentUser.id,
-  country: currentUser.country
+  attributes: { country: currentUser.country }
 });
 
-if (useNewCheckout) {
-  showNewCheckout();    // ✅ Only some users, gradually increased
-} else {
-  showOldCheckout();    // ✅ Fallback to proven experience
-}
+if (useNewCheckout) showNewCheckout();  // gradually exposed
+else showOldCheckout();                 // safe fallback
 ```
 
-**The Result:**
-- 🛡️ **Reduced Risk**: Problems affect fewer users
-- 📊 **Data-Driven**: Know which version performs better  
-- ⚡ **Instant Control**: Turn features on/off without code deployment
-- 🎯 **Targeted Rollouts**: VIP users get features first, etc.
+**Benefits:**
 
-### 💡 Perfect For:
-- **New feature launches** (gradual rollout from 1% → 100%)
-- **A/B testing** (red button vs blue button)
-- **User targeting** (premium features for paid users only)
-- **Emergency rollbacks** (kill switch when things go wrong)
-- **Performance testing** (new algorithm vs old algorithm)
+* 🛡️ **Reduced Risk** — issues affect fewer users at first
+* 📊 **Data‑Driven** — compare versions, measure success
+* ⚡ **Instant Control** — flip on/off without deploys
+* 🎯 **Targeted** — VIPs, beta users, or regions first
 
-## ✨ Features Overview
+---
 
-🚀 **Core Capabilities:**
-- **Feature Flags**: Boolean, string, number, and JSON flag types
-- **Canary Releases**: Gradual rollouts with percentage targeting
-- **A/B Testing**: Multi-variant testing with weight distribution
-- **User Targeting**: Rules based on user attributes and segments
-- **Real-time Evaluation**: Sub-100ms flag evaluation with Redis caching
-- **Kill Switch**: Instant rollback capability for emergency situations
+## Architecture
 
-🏗️ **Architecture:**
-- **Control Plane**: RESTful API for flag management
-- **Evaluation Service**: High-performance flag evaluation engine
-- **SDK**: TypeScript/JavaScript client library
-- **Rule Engine**: Sophisticated targeting and rollout logic
-- **Observability**: Prometheus metrics, Grafana dashboards, structured logging
+**Components**
 
-🔧 **Infrastructure:**
-- **Database**: PostgreSQL with audit logging
-- **Cache**: Redis for performance optimization
-- **Monitoring**: Prometheus + Grafana stack
-- **Containerization**: Docker Compose for local development
+* **Control Plane (8080):** Admin API to create/update/delete flags, set targeting rules, manage variants, and audit changes.
+* **Evaluation Service (8081):** Low‑latency flag evaluation with local/Redis caching and rule engine.
+* **Metrics Service (9091):** Exposes Prometheus metrics (evaluation counts, latencies, cache hits, active flags).
+* **Rule Engine:** Decides who gets what (attributes, segments, percentage rollout, A/B weights).
+* **SDK (TS/JS):** Simple client library with local cache, polling, remote fallback, and analytics events.
+* **PostgreSQL:** Source of truth (flags, configs per environment, rules, variants, segments, audit log).
+* **Redis:** Performance cache for configs and (optionally) evaluation results.
 
-## 🚀 Quick Start
+**High‑level diagram**
 
-### Prerequisites
-- **Node.js 16+**
-- **Docker & Docker Compose**
-- **Windows PowerShell** (recommended) or Git Bash
-- **Git**
+```
+Admin/UI ──> Control Plane ──> PostgreSQL
+                         └─> Invalidate Redis
 
-### 1. Setup Project
+App ──> SDK ──> (local cache) ──╮
+                  miss          │
+                                v
+                         Evaluation Service ──> Redis ──> (miss) ──> PostgreSQL
+                                 │                                 ^
+                                 └──────────────> Prometheus <─────┘
+                                                   │
+                                                   v
+                                                Grafana
+```
 
-**PowerShell (Recommended):**
-```powershell
-# Clone and setup
+---
+
+## How It Works (End‑to‑End Flow)
+
+1. **Admin** creates/edits a flag in the **Control Plane** → stored in **PostgreSQL**; caches are invalidated.
+2. **SDK** running in your app polls for configs and caches them locally.
+3. When your app asks, “Does user123 get `dark_mode`?”, the **SDK**:
+
+   * Uses **local cache** for instant decision; or
+   * Calls the **Evaluation Service** which pulls from **Redis**, falling back to **PostgreSQL** if needed.
+4. **Rule Engine** evaluates targeting (attributes, segments) and rollout percentage/bucketing.
+5. **Metrics Service** exposes counters/latencies; **Grafana** dashboards visualize health and usage.
+
+---
+
+## Prerequisites
+
+* **Node.js** 16+
+* **Docker & Docker Compose**
+* **Git**
+* On Windows, prefer **PowerShell** (WSL/Git Bash can have Docker networking quirks).
+
+---
+
+## Quick Start
+
+### 1) Clone & Install
+
+```bash
 git clone <your-repo>
 cd flagcraft
-
-# Install dependencies
 npm install
+```
 
-# Start infrastructure (PostgreSQL, Redis, Prometheus, Grafana)
+### 2) Start Infrastructure (PostgreSQL, Redis, Prometheus, Grafana)
+
+```bash
 docker-compose up -d
-
-# Wait for services to start
-Start-Sleep 20
+# give containers time to come up
+sleep 20
 ```
 
-**Alternative - Automated Setup:**
-```powershell
-# Run the setup script (handles everything)
-bash ./setup.sh
+### 3) Initialize Database
+
+```bash
+npm run db:migrate   # create schema
+npm run db:seed      # seed sample data & flags
 ```
 
-### 2. Initialize Database
-```powershell
-# Create database schema
-npm run db:migrate
+### 4) Start Services (choose one method)
 
-# Add sample data (creates 5 sample flags)
-npm run db:seed
+**Method A — Separate terminals (recommended):**
+
+* **Terminal 1** — Evaluation Service
+
+  ```bash
+  npm run dev:eval
+  ```
+* **Terminal 2** — Control Plane
+
+  ```bash
+  npm run dev:control
+  ```
+* **Terminal 3** — Metrics Service
+
+  ```bash
+  npm run dev:metrics
+  ```
+
+**Method B — Scripts:**
+
+```bash
+bash ./setup.sh             # optional helper
+bash ./test-complete.sh     # full integration test
+node test-sdk.js            # SDK test once services are up
 ```
 
-### 3. Start Services
+### 5) Verify Health
 
-#### Method A: Manual Start (Recommended)
-Open **4 separate PowerShell terminals**:
-
-**Terminal 1 - Evaluation Service:**
-```powershell
-cd flagcraft
-npm run dev:eval
+```bash
+curl -s http://localhost:8081/health   # evaluation
+curl -s http://localhost:8080/health   # control plane
+curl -s http://localhost:9091/health   # metrics
 ```
 
-**Terminal 2 - Control Plane:**
-```powershell
-cd flagcraft
-npm run dev:control
+---
+
+## Services & Ports
+
+| Service            | Port | Purpose                               |
+| ------------------ | ---- | ------------------------------------- |
+| Control Plane      | 8080 | Admin REST API for flags/config/rules |
+| Evaluation Service | 8081 | Low‑latency flag evaluation           |
+| Metrics Service    | 9091 | Prometheus metrics endpoint           |
+| PostgreSQL         | 5432 | Primary database                      |
+| Redis              | 6379 | Config/evaluation caching             |
+| Grafana            | 3000 | Dashboards (admin/admin)              |
+| Prometheus         | 9090 | Metrics collection                    |
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```ini
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=canary_flags
+DB_USER=canary_user
+DB_PASS=canary_pass
+
+# Servers
+CONTROL_PLANE_PORT=8080
+EVALUATION_SERVICE_PORT=8081
+METRICS_PORT=9091
+
+# Security
+API_KEY=canary-12345-secret
+
+# Runtime
+NODE_ENV=development
+LOG_LEVEL=info
 ```
 
-**Terminal 3 - Metrics Service:**
-```powershell
-cd flagcraft
-npm run dev:metrics
+> **Note:** Docker Compose is preconfigured to work locally. If you reset volumes, re‑run migrations and seed.
+
+---
+
+## API Examples
+
+### 1) Health Checks
+
+```bash
+curl -s http://localhost:8081/health  # evaluation
+curl -s http://localhost:8080/health  # control plane
+curl -s http://localhost:9091/health  # metrics
 ```
 
-**Terminal 4 - Test Everything:**
-```powershell
-cd flagcraft
-# Wait for services to start
-Start-Sleep 10
+### 2) Create a Flag (Control Plane)
 
-# Test health checks
-curl.exe -s http://localhost:8081/health
-curl.exe -s http://localhost:8080/health
-curl.exe -s http://localhost:9091/health
+```bash
+curl -s -X POST http://localhost:8080/api/flags \
+  -H 'X-API-Key: canary-12345-secret' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "key": "new_dashboard",
+    "name": "New Dashboard",
+    "description": "Enable the redesigned dashboard",
+    "flag_type": "boolean"
+  }'
 ```
 
-#### Method B: Automated Test Scripts
+### 3) Update Flag Config per Environment
 
-**Option 1: PowerShell Script (Windows Native)**
-```powershell
-# Run native PowerShell test (fastest, most reliable)
-.\test-powershell.ps1
-
-# If you get execution policy error, run this first:
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```bash
+curl -s -X PUT http://localhost:8080/api/flags/new_dashboard/environments/production \
+  -H 'X-API-Key: canary-12345-secret' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "is_enabled": true,
+    "rollout_percentage": 25
+  }'
 ```
 
-**Option 2: Comprehensive Test**
-```powershell
-# Run full setup and test suite
-bash ./test-complete.sh
+### 4) Evaluate a Flag (Evaluation Service)
+
+```bash
+curl -s -X POST http://localhost:8081/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "flag_key": "dark_mode",
+    "user_context": {
+      "user_id": "user123",
+      "attributes": {"country": "US", "tier": "premium"}
+    },
+    "default_value": false,
+    "environment": "production"
+  }'
 ```
 
-**Option 3: SDK Testing**
-```powershell
-# After services are running, test the SDK
-node test-sdk.js
-```
+---
 
-## 🧪 API Testing Examples
+## SDK Usage
 
-### 1. Health Checks
-
-**PowerShell:**
-```powershell
-# Check all services
-curl.exe -s http://localhost:8081/health  # Evaluation Service
-curl.exe -s http://localhost:8080/health  # Control Plane  
-curl.exe -s http://localhost:9091/health  # Metrics Service
-```
-
-### 2. Create a Flag
-
-**PowerShell:**
-```powershell
-$headers = @{
-    'X-API-Key' = 'canary-12345-secret'
-    'Content-Type' = 'application/json'
-}
-$body = @{
-    key = "new_dashboard"
-    name = "New Dashboard"
-    description = "Enable the redesigned dashboard"
-    flag_type = "boolean"
-    is_enabled = $true
-} | ConvertTo-Json
-
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags" -Method POST -Headers $headers -Body $body
-```
-
-### 3. Evaluate a Flag
-
-**PowerShell:**
-```powershell
-$evalBody = @{
-    flag_key = "dark_mode"
-    user_context = @{ 
-        user_id = "user123"
-        attributes = @{ country = "US"; tier = "premium" }
-    }
-    default_value = $false
-} | ConvertTo-Json -Depth 3
-
-$evalHeaders = @{ 'Content-Type' = 'application/json' }
-Invoke-WebRequest -Uri "http://localhost:8081/evaluate" -Method POST -Headers $evalHeaders -Body $evalBody
-```
-
-## 🔧 SDK Usage
-
-### Basic Usage
-```typescript
+```ts
 import { createCanarySDK } from './dist/sdk/canary-sdk.js';
 
 const sdk = createCanarySDK({
@@ -229,137 +288,99 @@ const sdk = createCanarySDK({
   environment: 'production'
 });
 
-// Wait for SDK to initialize
 sdk.on('ready', async () => {
-  // Evaluate a flag
   const isDarkMode = await sdk.evaluateFlag('dark_mode', {
     user_id: 'user123',
     attributes: { country: 'US', tier: 'premium' }
   }, false);
-  
+
   console.log('Dark mode enabled:', isDarkMode);
 });
+
+sdk.on('error', (err) => console.error('SDK error:', err));
 ```
 
-## 📊 Monitoring
+**Notes**
 
-### Dashboards
-- **Grafana**: http://localhost:3000 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Logs**: `./logs/` directory
+* The SDK keeps a **local cache** and **polls** the server for changes (default every 30s).
+* If local cache is missing/stale, it **falls back to remote evaluation**.
+* If the service is unreachable, it returns the **provided default** (safe fallback).
 
-### Key Metrics
-- `flag_evaluations_total` - Total flag evaluations
-- `flag_evaluation_duration_seconds` - Evaluation latency
-- `flag_cache_hits_total` - Cache hit rate
-- `active_flags_total` - Number of active flags
+---
 
-## 🛠️ Development
+## Monitoring & Metrics
 
-### Available Scripts
-```powershell
-# Build and Development
-npm run build              # Compile TypeScript
-npm run dev               # Watch mode (all services)
+* **Grafana:** [http://localhost:3000](http://localhost:3000) (login: `admin` / `admin`)
+* **Prometheus:** [http://localhost:9090](http://localhost:9090)
 
-# Individual Services
-npm run dev:eval          # Start evaluation service only
-npm run dev:control       # Start control plane only  
-npm run dev:metrics       # Start metrics service only
+**Key Metrics** (exposed by Metrics Service @ 9091):
 
-# Database Operations
-npm run db:migrate        # Run database migrations
-npm run db:seed          # Seed sample data
-npm run health           # Check service health
+* `flag_evaluations_total{flag,environment,result}` — evaluation counts
+* `flag_evaluation_duration_seconds` — evaluation latency histogram
+* `flag_cache_hits_total{layer="sdk|redis"}` — cache hit counts
+* `active_flags_total` — active flag count
 
-# Testing
-node test-sdk.js          # Test SDK functionality
-bash ./test-complete.sh   # Full integration test
-.\test-powershell.ps1     # PowerShell native test
+Logs are written to `./logs/` (structured, with correlation IDs when available).
+
+---
+
+## Development Scripts
+
+```bash
+npm run build          # compile TypeScript → dist/
+npm run dev            # watch mode (if configured)
+
+# Individual services
+npm run dev:eval       # start evaluation service only
+npm run dev:control    # start control plane only
+npm run dev:metrics    # start metrics service only
+
+# Database
+npm run db:migrate     # run migrations (create schema)
+npm run db:seed        # seed sample flags/segments
+
+# Health & Testing
+npm run health         # (optional) health aggregator
+node test-sdk.js       # simple SDK test
+bash ./test-complete.sh
 ```
 
-## 🔧 Configuration
+---
 
-### Service Ports
-- **Control Plane**: `http://localhost:8080` - Flag management API
-- **Evaluation Service**: `http://localhost:8081` - Flag evaluation API  
-- **Metrics Service**: `http://localhost:9091` - Prometheus metrics
-- **PostgreSQL**: `localhost:5432` - Database
-- **Redis**: `localhost:6379` - Cache
-- **Grafana**: `http://localhost:3000` (admin/admin) - Dashboards
-- **Prometheus**: `http://localhost:9090` - Metrics collection
+## Troubleshooting
 
-### Environment Variables
-Create a `.env` file with:
-```env
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=canary_flags
-DB_USER=canary_user
-DB_PASS=canary_pass
+### PostgreSQL authentication (v15+) — `password authentication failed`
 
-# Server Configuration
-CONTROL_PLANE_PORT=8080
-EVALUATION_SERVICE_PORT=8081
-METRICS_PORT=9091
+Postgres 15 defaults to `scram-sha-256`. This project’s Docker is configured for `md5`. If you hit auth issues:
 
-# Security
-API_KEY=canary-12345-secret
-
-# Environment
-NODE_ENV=development
-LOG_LEVEL=info
-```
-
-## ⚠️ Important Setup Notes
-
-### Database Authentication Fix
-This project includes a fix for PostgreSQL authentication issues:
-- **Problem**: PostgreSQL 15+ defaults to `scram-sha-256` authentication
-- **Solution**: Docker Compose configured to use `md5` authentication
-
-If you see "password authentication failed":
-```powershell
+```bash
 docker-compose down
-docker volume rm canary-flags_postgres_data
+docker volume rm flagcraft_postgres_data  # name may differ
 docker-compose up -d
-Start-Sleep 20
+sleep 20
 npm run db:migrate
 npm run db:seed
 ```
 
-### Windows/WSL Considerations
-- **PowerShell (Recommended)**: All services work perfectly
-- **WSL/Git Bash**: May have networking issues with Docker containers
-- **If bash scripts fail**: Use PowerShell commands instead
+### Windows / WSL notes
 
-## 🎓 Why This Project?
-
-This project demonstrates advanced software engineering concepts:
-
-**🏗️ Distributed Systems**
-- Service-oriented architecture
-- Data consistency across services
-- Caching strategies and circuit breakers
-
-**⚡ Performance Engineering**
-- Sub-millisecond evaluation latency
-- Efficient Redis caching
-- Connection pooling and optimization
-
-**🔒 Reliability & Safety**
-- Progressive rollouts minimize risk
-- Kill switches for emergency situations
-- Comprehensive error handling
-
-**📊 Observability**
-- Structured logging with correlation IDs
-- Prometheus metrics and alerting
-- Grafana dashboards for visualization
-
-Perfect for demonstrating systems thinking, platform engineering skills, and production-ready software development! 🚀
+* Prefer **PowerShell** for best compatibility.
+* Some bash scripts on WSL/Git Bash may hit Docker networking quirks; use the PowerShell equivalents where provided.
 
 ---
 
-**Built with ❤️ for production-scale feature flag management**
+## Why This Project?
+
+Demonstrates production‑grade **platform engineering** and **distributed systems** skills:
+
+* 🏗️ Service‑oriented architecture; separation of control/data planes
+* ⚡ Performance (Redis caching, connection pooling)
+* 🔒 Reliability (gradual rollouts, kill switches, robust fallbacks)
+* 📊 Observability (Prometheus, Grafana, structured logging)
+
+
+---
+
+## License
+
+**MIT** — see `LICENSE`.
