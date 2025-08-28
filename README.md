@@ -1,6 +1,51 @@
-# 🐦 Canary Feature Flag System
+﻿# 🐦 FlagCraft - Feature Flag Platform
 
-A production-ready feature flag and canary release system built with Node.js, TypeScript, PostgreSQL, and Redis.
+A feature flag and canary release system built with Node.js, TypeScript, PostgreSQL, and Redis.
+
+## 🎯 What is FlagCraft?
+
+**FlagCraft** is a  feature flag platform that lets you safely release features to users without risky deployments. Instead of releasing features to everyone at once, you can:
+
+- **Control who sees what**: Show features to specific users or groups
+- **Roll out gradually**: Start with 5% of users, then 25%, then 100%
+- **A/B test everything**: Compare different versions to see what works best
+- **Kill switch instantly**: Turn off problematic features in seconds, not hours
+
+### 🚀 Simple Example
+
+Imagine you built a new checkout flow but aren't sure if it's better than the old one:
+
+```typescript
+// Instead of this risky deployment:
+if (true) {
+  showNewCheckout();  // 😱 All users get untested feature
+}
+
+// Do this safe, gradual rollout:
+const useNewCheckout = await flagcraft.evaluateFlag('new_checkout', {
+  user_id: currentUser.id,
+  country: currentUser.country
+});
+
+if (useNewCheckout) {
+  showNewCheckout();    // ✅ Only some users, gradually increased
+} else {
+  showOldCheckout();    // ✅ Fallback to proven experience
+}
+```
+
+**The Result:**
+- 🛡️ **Reduced Risk**: Problems affect fewer users
+- 📊 **Data-Driven**: Know which version performs better  
+- ⚡ **Instant Control**: Turn features on/off without code deployment
+- 🎯 **Targeted Rollouts**: VIP users get features first, etc.
+
+### 💡 Perfect For:
+- **New feature launches** (gradual rollout from 1% → 100%)
+- **A/B testing** (red button vs blue button)
+- **User targeting** (premium features for paid users only)
+- **Emergency rollbacks** (kill switch when things go wrong)
+- **Performance testing** (new algorithm vs old algorithm)
 
 ## ✨ Features Overview
 
@@ -39,7 +84,7 @@ A production-ready feature flag and canary release system built with Node.js, Ty
 ```powershell
 # Clone and setup
 git clone <your-repo>
-cd canary-flags
+cd flagcraft
 
 # Install dependencies
 npm install
@@ -73,25 +118,25 @@ Open **4 separate PowerShell terminals**:
 
 **Terminal 1 - Evaluation Service:**
 ```powershell
-cd canary-flags
+cd flagcraft
 npm run dev:eval
 ```
 
 **Terminal 2 - Control Plane:**
 ```powershell
-cd canary-flags
+cd flagcraft
 npm run dev:control
 ```
 
 **Terminal 3 - Metrics Service:**
 ```powershell
-cd canary-flags
+cd flagcraft
 npm run dev:metrics
 ```
 
 **Terminal 4 - Test Everything:**
 ```powershell
-cd canary-flags
+cd flagcraft
 # Wait for services to start
 Start-Sleep 10
 
@@ -112,9 +157,9 @@ curl.exe -s http://localhost:9091/health
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-**Option 2: Comprehensive Bash Test**
+**Option 2: Comprehensive Test**
 ```powershell
-# Run full setup and test suite (handles everything)
+# Run full setup and test suite
 bash ./test-complete.sh
 ```
 
@@ -124,71 +169,7 @@ bash ./test-complete.sh
 node test-sdk.js
 ```
 
-## 🏗️ System Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Control Plane │    │ Evaluation API  │    │  Metrics API    │
-│    (Port 8080)  │    │   (Port 8081)   │    │  (Port 9091)    │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-               ┌─────────────────┴─────────────────┐
-               │                                   │
-    ┌─────────────────┐                 ┌─────────────────┐
-    │   PostgreSQL    │                 │      Redis      │
-    │   (Port 5432)   │                 │   (Port 6379)   │
-    └─────────────────┘                 └─────────────────┘
-               │                                   │
-               └─────────────┬─────────────────────┘
-                             │
-               ┌─────────────────────────────────┐
-               │        Client SDKs              │
-               │  ┌─────────┐  ┌─────────────┐   │
-               │  │   Web   │  │  Mobile/API │   │
-               │  │   App   │  │     Apps    │   │
-               │  └─────────┘  └─────────────┘   │
-               └─────────────────────────────────┘
-```
-
-### Core Components
-
-**🎛️ Control Plane (Port 8080)**
-- Flag CRUD operations
-- User segment management
-- Audit trail and change history
-- Admin dashboard (future)
-- RESTful API with OpenAPI docs
-
-**⚡ Evaluation Service (Port 8081)**
-- High-performance flag evaluation
-- Redis caching for sub-100ms responses
-- Batch evaluation support
-- SDK configuration endpoint
-- Circuit breaker and fallback handling
-
-**📊 Metrics Service (Port 9091)**
-- Prometheus metrics export
-- Real-time evaluation statistics
-- Performance monitoring
-- Custom business metrics
-
-**🧠 Rule Engine**
-- Percentage-based rollouts
-- User attribute targeting
-- Segment-based rules
-- A/B test variant selection
-- Kill switch override
-
-**📚 SDK Library**
-- Local and remote evaluation
-- Automatic configuration polling
-- Event-driven updates
-- Analytics collection
-- Fallback mechanisms
-
-## 🧪 Complete API Testing Guide
+## 🧪 API Testing Examples
 
 ### 1. Health Checks
 
@@ -200,14 +181,9 @@ curl.exe -s http://localhost:8080/health  # Control Plane
 curl.exe -s http://localhost:9091/health  # Metrics Service
 ```
 
-**Expected Response:**
-```json
-{"status":"healthy","service":"evaluation","timestamp":"2024-01-01T12:00:00.000Z"}
-```
+### 2. Create a Flag
 
-### 2. Flag Management (Control Plane API)
-
-#### Create a Boolean Flag
+**PowerShell:**
 ```powershell
 $headers = @{
     'X-API-Key' = 'canary-12345-secret'
@@ -219,72 +195,21 @@ $body = @{
     description = "Enable the redesigned dashboard"
     flag_type = "boolean"
     is_enabled = $true
-    conditions = @()
 } | ConvertTo-Json
 
 Invoke-WebRequest -Uri "http://localhost:8080/api/flags" -Method POST -Headers $headers -Body $body
 ```
 
-#### Create a String Flag (A/B Testing)
-```powershell
-$body = @{
-    key = "checkout_algorithm"
-    name = "Checkout Algorithm"
-    description = "A/B test different checkout flows"
-    flag_type = "string"
-    is_enabled = $true
-    default_value = "standard"
-    variants = @(
-        @{ key = "standard"; value = "standard_checkout"; weight = 50 },
-        @{ key = "express"; value = "express_checkout"; weight = 50 }
-    )
-} | ConvertTo-Json -Depth 3
+### 3. Evaluate a Flag
 
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags" -Method POST -Headers $headers -Body $body
-```
-
-#### List All Flags
-```powershell
-$headers = @{ 'X-API-Key' = 'canary-12345-secret' }
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags" -Headers $headers
-```
-
-#### Get Flag by Key
-```powershell
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags/new_dashboard" -Headers $headers
-```
-
-#### Update Flag
-```powershell
-$updateBody = @{
-    name = "New Dashboard v2"
-    description = "Updated dashboard with new features"
-    is_enabled = $false
-} | ConvertTo-Json
-
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags/new_dashboard" -Method PUT -Headers $headers -Body $updateBody
-```
-
-#### Delete Flag
-```powershell
-Invoke-WebRequest -Uri "http://localhost:8080/api/flags/new_dashboard" -Method DELETE -Headers $headers
-```
-
-### 3. Flag Evaluation (Evaluation API)
-
-#### Single Flag Evaluation
+**PowerShell:**
 ```powershell
 $evalBody = @{
     flag_key = "dark_mode"
     user_context = @{ 
         user_id = "user123"
-        attributes = @{
-            country = "US"
-            subscription_tier = "premium"
-            device_type = "mobile"
-        }
+        attributes = @{ country = "US"; tier = "premium" }
     }
-    environment = "production"
     default_value = $false
 } | ConvertTo-Json -Depth 3
 
@@ -292,172 +217,42 @@ $evalHeaders = @{ 'Content-Type' = 'application/json' }
 Invoke-WebRequest -Uri "http://localhost:8081/evaluate" -Method POST -Headers $evalHeaders -Body $evalBody
 ```
 
-#### Batch Evaluation
-```powershell
-$batchBody = @{
-    requests = @(
-        @{
-            flag_key = "dark_mode"
-            user_context = @{ user_id = "user123"; attributes = @{ tier = "premium" } }
-            default_value = $false
-        },
-        @{
-            flag_key = "new_checkout_flow"
-            user_context = @{ user_id = "user123"; attributes = @{ country = "US" } }
-            default_value = $false
-        },
-        @{
-            flag_key = "checkout_algorithm"
-            user_context = @{ user_id = "user123" }
-            default_value = "standard"
-        }
-    )
-} | ConvertTo-Json -Depth 4
-
-Invoke-WebRequest -Uri "http://localhost:8081/evaluate/batch" -Method POST -Headers $evalHeaders -Body $batchBody
-```
-
-### 4. User Segments
-
-#### Create User Segment
-```powershell
-$segmentBody = @{
-    key = "beta_users"
-    name = "Beta Users"
-    description = "Early adopters and beta testers"
-    conditions = @(
-        @{
-            attribute = "user_type"
-            operator = "equals"
-            value = "beta"
-        },
-        @{
-            attribute = "signup_date"
-            operator = "greater_than"
-            value = "2024-01-01"
-        }
-    )
-} | ConvertTo-Json -Depth 3
-
-Invoke-WebRequest -Uri "http://localhost:8080/api/segments" -Method POST -Headers $headers -Body $segmentBody
-```
-
-### 5. Metrics and Analytics
-
-#### Get Evaluation Stats
-```powershell
-curl.exe -s "http://localhost:8081/stats"
-```
-
-#### Get Prometheus Metrics
-```powershell
-curl.exe -s "http://localhost:9091/metrics"
-```
-
-#### Get Cached Flags
-```powershell
-curl.exe -s "http://localhost:8081/cache"
-```
-
 ## 🔧 SDK Usage
-
-### Installation
-```bash
-npm install ./dist/sdk/canary-sdk.js
-```
 
 ### Basic Usage
 ```typescript
-import { createCanarySDK } from 'canary-sdk';
+import { createCanarySDK } from './dist/sdk/canary-sdk.js';
 
 const sdk = createCanarySDK({
   apiKey: 'your-api-key',
   baseUrl: 'http://localhost:8081',
-  environment: 'production',
-  pollInterval: 30000
+  environment: 'production'
 });
 
 // Wait for SDK to initialize
 sdk.on('ready', async () => {
-  console.log('SDK is ready');
-  
-  // Evaluate a boolean flag
+  // Evaluate a flag
   const isDarkMode = await sdk.evaluateFlag('dark_mode', {
     user_id: 'user123',
     attributes: { country: 'US', tier: 'premium' }
   }, false);
   
   console.log('Dark mode enabled:', isDarkMode);
-  
-  // Evaluate multiple flags at once
-  const results = await sdk.evaluateFlags([
-    { flagKey: 'dark_mode', userContext: { user_id: 'user123' } },
-    { flagKey: 'new_checkout', userContext: { user_id: 'user123' }, defaultValue: false }
-  ]);
-  
-  console.log('Batch results:', results);
-});
-
-sdk.on('error', (error) => {
-  console.error('SDK error:', error);
-});
-
-// Clean up when done
-process.on('SIGINT', () => {
-  sdk.destroy();
 });
 ```
 
-### Advanced SDK Features
-```typescript
-// Local evaluation (when config is cached)
-const isLocal = sdk.isLocalEvaluationEnabled();
-
-// Force remote evaluation
-const remoteResult = await sdk.evaluateRemotely('feature_x', userContext);
-
-// Get cached configuration
-const config = sdk.getCachedConfig();
-
-// Listen for configuration updates
-sdk.on('configUpdated', () => {
-  console.log('Flag configuration updated');
-});
-
-// Flush analytics manually
-sdk.flushAnalytics();
-```
-
-## 📊 Monitoring & Observability
+## 📊 Monitoring
 
 ### Dashboards
 - **Grafana**: http://localhost:3000 (admin/admin)
-  - Flag evaluation metrics
-  - Performance dashboards
-  - Error rates and health checks
-  - Custom business metrics
-
 - **Prometheus**: http://localhost:9090
-  - Raw metrics and queries
-  - Alert rule configuration
-  - Target monitoring
+- **Logs**: `./logs/` directory
 
 ### Key Metrics
 - `flag_evaluations_total` - Total flag evaluations
 - `flag_evaluation_duration_seconds` - Evaluation latency
 - `flag_cache_hits_total` - Cache hit rate
 - `active_flags_total` - Number of active flags
-- `sdk_connections_total` - Connected SDK instances
-
-### Logs
-```powershell
-# Service logs
-docker-compose logs -f
-
-# Application logs
-tail -f logs/combined.log
-tail -f logs/error.log
-```
 
 ## 🛠️ Development
 
@@ -477,82 +272,45 @@ npm run db:migrate        # Run database migrations
 npm run db:seed          # Seed sample data
 npm run health           # Check service health
 
-# Docker Operations
-npm run docker:up         # Start infrastructure
-npm run docker:down       # Stop infrastructure
-npm run docker:logs       # View container logs
-
 # Testing
-npm test                  # Run unit tests
-npm run test:watch        # Watch mode testing
 node test-sdk.js          # Test SDK functionality
 bash ./test-complete.sh   # Full integration test
-
-# Utilities
-npm run cli              # Interactive CLI tool
-npm run start            # Start all services (production)
-npm run setup            # Run setup script
+.\test-powershell.ps1     # PowerShell native test
 ```
 
-### Development Workflow
-1. **Start infrastructure**: `docker-compose up -d`
-2. **Initialize database**: `npm run db:migrate && npm run db:seed`
-3. **Start services** in separate terminals:
-   - `npm run dev:eval`
-   - `npm run dev:control`
-   - `npm run dev:metrics`
-4. **Test**: Use `.\test-powershell.ps1` or `bash ./test-complete.sh`
-5. **SDK Development**: `node test-sdk.js`
+## 🔧 Configuration
 
-### Database Schema
+### Service Ports
+- **Control Plane**: `http://localhost:8080` - Flag management API
+- **Evaluation Service**: `http://localhost:8081` - Flag evaluation API  
+- **Metrics Service**: `http://localhost:9091` - Prometheus metrics
+- **PostgreSQL**: `localhost:5432` - Database
+- **Redis**: `localhost:6379` - Cache
+- **Grafana**: `http://localhost:3000` (admin/admin) - Dashboards
+- **Prometheus**: `http://localhost:9090` - Metrics collection
 
-**Core Tables:**
-- `feature_flags` - Flag definitions and metadata
-- `flag_configs` - Environment-specific configurations
-- `flag_variants` - A/B test variants and weights
-- `rollout_rules` - Targeting and rollout rules
-- `user_segments` - User grouping definitions
-- `audit_log` - Complete change history
+### Environment Variables
+Create a `.env` file with:
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=canary_flags
+DB_USER=canary_user
+DB_PASS=canary_pass
 
-**Relationships:**
-```sql
-feature_flags (1) → (many) flag_configs
-feature_flags (1) → (many) flag_variants
-feature_flags (1) → (many) rollout_rules
-user_segments (1) → (many) rollout_rules
+# Server Configuration
+CONTROL_PLANE_PORT=8080
+EVALUATION_SERVICE_PORT=8081
+METRICS_PORT=9091
+
+# Security
+API_KEY=canary-12345-secret
+
+# Environment
+NODE_ENV=development
+LOG_LEVEL=info
 ```
-
-### Key Features Deep Dive
-
-**🎯 Percentage Rollouts**
-- Gradual releases: 1% → 5% → 25% → 50% → 100%
-- Consistent user bucketing
-- Rollback capability at any percentage
-
-**👥 User Targeting**
-- Attribute-based rules (country, tier, device, etc.)
-- Segment-based targeting
-- Complex boolean logic (AND/OR conditions)
-
-**🧪 A/B Testing**
-- Multiple variants with weight distribution
-- Statistical significance tracking
-- Winner selection and automatic promotion
-
-**🚨 Kill Switch**
-- Instant flag disable/enable
-- Override all rules and percentages
-- Emergency rollback capability
-
-**⚡ Performance**
-- Redis caching for <100ms evaluation
-- Batch evaluation support
-- Connection pooling and optimization
-
-**🔍 Audit Trail**
-- Complete change history
-- User attribution
-- Rollback to previous states
 
 ## ⚠️ Important Setup Notes
 
@@ -560,10 +318,9 @@ user_segments (1) → (many) rollout_rules
 This project includes a fix for PostgreSQL authentication issues:
 - **Problem**: PostgreSQL 15+ defaults to `scram-sha-256` authentication
 - **Solution**: Docker Compose configured to use `md5` authentication
-- **If you see "password authentication failed"**: Restart Docker containers
 
+If you see "password authentication failed":
 ```powershell
-# Reset database if you get auth errors
 docker-compose down
 docker volume rm canary-flags_postgres_data
 docker-compose up -d
@@ -577,113 +334,6 @@ npm run db:seed
 - **WSL/Git Bash**: May have networking issues with Docker containers
 - **If bash scripts fail**: Use PowerShell commands instead
 
-## 🔧 Configuration
-
-### Environment Variables (.env file)
-```env
-# Database Configuration
-DATABASE_URL=postgresql://canary_user:canary_pass@localhost:5432/canary_flags
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=canary_flags
-DB_USER=canary_user
-DB_PASS=canary_pass
-DB_SSL=false
-DB_MAX_CONNECTIONS=20
-
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_PREFIX=canary:
-
-# Server Configuration
-CONTROL_PLANE_PORT=8080
-EVALUATION_SERVICE_PORT=8081
-METRICS_PORT=9091
-CORS_ENABLED=true
-REQUEST_LOGGING=true
-
-# Security
-JWT_SECRET=aNrZt5BS48i3E1ItIv40C/XnyjziE/6yuZgn6Q+X4KQ=
-API_KEY=canary-12345-secret
-
-# Feature Configuration
-DEFAULT_CONFIG_POLL_INTERVAL_MS=30000
-MAX_CACHE_SIZE=1000
-EVALUATION_TIMEOUT_MS=100
-
-# Environment
-NODE_ENV=development
-LOG_LEVEL=info
-
-# Metrics
-METRICS_ENABLED=true
-PROMETHEUS_ENABLED=true
-```
-
-### Service Ports
-- **Control Plane**: `http://localhost:8080` - Flag management API
-- **Evaluation Service**: `http://localhost:8081` - Flag evaluation API  
-- **Metrics Service**: `http://localhost:9091` - Prometheus metrics
-- **PostgreSQL**: `localhost:5432` - Database
-- **Redis**: `localhost:6379` - Cache
-- **Grafana**: `http://localhost:3000` (admin/admin) - Dashboards
-- **Prometheus**: `http://localhost:9090` - Metrics collection
-
-### Sample Flag Configuration
-```json
-{
-  "key": "new_checkout_flow",
-  "name": "New Checkout Flow",
-  "description": "Redesigned checkout process with improved UX",
-  "flag_type": "boolean",
-  "is_enabled": true,
-  "environments": {
-    "development": {
-      "enabled": true,
-      "rollout_percentage": 100,
-      "rules": []
-    },
-    "staging": {
-      "enabled": true,
-      "rollout_percentage": 50,
-      "rules": [
-        {
-          "type": "segment",
-          "segment_key": "beta_users",
-          "percentage": 100
-        }
-      ]
-    },
-    "production": {
-      "enabled": true,
-      "rollout_percentage": 10,
-      "rules": [
-        {
-          "type": "attribute",
-          "attribute": "user_type",
-          "operator": "equals",
-          "value": "premium",
-          "percentage": 100
-        },
-        {
-          "type": "percentage",
-          "percentage": 5
-        }
-      ]
-    }
-  },
-  "variants": [
-    {
-      "key": "enabled",
-      "value": true,
-      "weight": 100
-    }
-  ]
-}
-```
-
 ## 🎓 Why This Project?
 
 This project demonstrates advanced software engineering concepts:
@@ -691,50 +341,25 @@ This project demonstrates advanced software engineering concepts:
 **🏗️ Distributed Systems**
 - Service-oriented architecture
 - Data consistency across services
-- Caching strategies and invalidation
-- Circuit breakers and fallback mechanisms
+- Caching strategies and circuit breakers
 
 **⚡ Performance Engineering**
 - Sub-millisecond evaluation latency
-- Efficient caching with Redis
+- Efficient Redis caching
 - Connection pooling and optimization
-- Batch processing for efficiency
 
 **🔒 Reliability & Safety**
 - Progressive rollouts minimize risk
 - Kill switches for emergency situations
 - Comprehensive error handling
-- Graceful degradation patterns
 
 **📊 Observability**
 - Structured logging with correlation IDs
 - Prometheus metrics and alerting
 - Grafana dashboards for visualization
-- Distributed tracing (future enhancement)
-
-**🛡️ Security**
-- API key authentication
-- Input validation and sanitization
-- SQL injection prevention
-- Rate limiting (future enhancement)
-
-**🧪 Testing**
-- Unit tests with Jest
-- Integration tests with real services
-- Load testing capabilities
-- SDK testing framework
 
 Perfect for demonstrating systems thinking, platform engineering skills, and production-ready software development! 🚀
 
-## 📚 Additional Resources
-
-- **API Documentation**: Available at `/docs` endpoint (future)
-- **Architecture Decision Records**: See `/docs/adr/` (future)
-- **Deployment Guide**: See `/docs/deployment.md` (future)
-- **Contributing**: See `CONTRIBUTING.md` (future)
-- **Changelog**: See `CHANGELOG.md` (future)
-
 ---
 
-**Built with ❤️ for production-scale feature flag management**#   F l a g C r a f t  
- 
+**Built with ❤️ for production-scale feature flag management**
