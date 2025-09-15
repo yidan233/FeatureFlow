@@ -1,4 +1,4 @@
-# FlagCraft
+# FeatureFlow
 
 A **feature flag** and **canary release** platform built with **Node.js**, **TypeScript**, **PostgreSQL**, and **Redis**.
 
@@ -8,7 +8,7 @@ Safely roll out features, run A/B tests, and flip kill switches instantly — wi
 
 ## Table of Contents
 
-* [What is FlagCraft?](#what-is-flagcraft)
+* [What is FeatureFlow?](#what-is-FeatureFlow)
 * [Why Use It](#why-use-it)
 * [Architecture](#architecture)
 * [How It Works (End‑to‑End Flow)](#how-it-works-endtoend-flow)
@@ -26,9 +26,9 @@ Safely roll out features, run A/B tests, and flip kill switches instantly — wi
 
 ---
 
-## What is FlagCraft?
+## What is FeatureFlow?
 
-FlagCraft is a feature management platform that lets you **control who sees what**, **roll out gradually**, **A/B test variants**, and **kill switch** problematic features instantly.
+FeatureFlow is a feature management platform that lets you **control who sees what**, **roll out gradually**, **A/B test variants**, and **kill switch** problematic features instantly.
 
 **You can:**
 
@@ -45,8 +45,8 @@ if (true) {
   showNewCheckout();
 }
 
-// Safer with FlagCraft
-const useNewCheckout = await flagcraft.evaluateFlag('new_checkout', {
+// Safer with FeatureFlow
+const useNewCheckout = await FeatureFlow.evaluateFlag('new_checkout', {
   user_id: currentUser.id,
   attributes: { country: currentUser.country }
 });
@@ -123,7 +123,7 @@ App ──> SDK ──> (local cache) ──╮
 
 ```bash
 git clone <your-repo>
-cd flagcraft
+cd FeatureFlow
 npm install
 ```
 
@@ -355,7 +355,7 @@ Postgres 15 defaults to `scram-sha-256`. This project’s Docker is configured f
 
 ```bash
 docker-compose down
-docker volume rm flagcraft_postgres_data  # name may differ
+docker volume rm FeatureFlow_postgres_data  # name may differ
 docker-compose up -d
 sleep 20
 npm run db:migrate
@@ -384,3 +384,4 @@ Demonstrates production‑grade **platform engineering** and **distributed syste
 ## License
 
 **MIT** — see `LICENSE`.
+
